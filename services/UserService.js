@@ -54,6 +54,61 @@ const getUserById = async (id) => {
     };
 }
 
+const getAllActiveUsers = async () => {
+    return {
+        code: 200,
+        message: await db.User.findAll({
+            attributes: {exclude: ['password']},
+            where: {
+                status: 1
+            }
+        })
+    };
+
+}
+const findUsers = async (req) => {
+    const { name, active, login_before_date, login_after_date } = req.query;
+    const where = { //using conditional prop technique, if variable is passed then is added to where object only if exists
+        ...( name && { name: { [db.Sequelize.Op.like]: `%${name}%` }}),
+        ...( active === 'true' || active === 1 && { status: 0 }),
+    };
+    return {
+        code: 200,
+        message: await db.User.findAll({
+            attributes: {exclude: ['password']},
+            where: where,
+            include: [{
+                model: db.Session,
+                attributes: [], //excluding session data so we dont expose tokens'
+                where: { // using conditional prop technique also
+                    createdAt:{
+                        [db.Sequelize.Op.and]:[
+                            ... login_before_date ? [{ [db.Sequelize.Op.lt]: login_before_date }] : [],
+                            ... login_after_date ? [{ [db.Sequelize.Op.gt]: login_after_date }] : [],
+                        ]
+                    }
+                }
+            }]
+        })
+    };
+}
+const bulkCreate = async (req) => {
+    const users = await Promise.all(req.locals.load.map(
+        async user => ({
+            name: user.name,
+            email: user.email,
+            password: await bcrypt.hash(user.password, 10),
+            cellphone: user.cellphone,
+            status: true
+        })
+    ))
+    await db.User.bulkCreate(users);
+    return {
+        code: 200,
+        message: `${req.locals.load.length} users created successfully. ${req.locals.eliminated} were not created due to invalid data.`
+    };
+
+}
 const updateUser = async (req) => {
     const user = db.User.findOne({
         where: {
@@ -104,7 +159,10 @@ const deleteUser = async (id) => {
 
 export default {
     createUser,
+    bulkCreate,
     getUserById,
+    getAllActiveUsers,
+    findUsers,
     updateUser,
     deleteUser,
 }
