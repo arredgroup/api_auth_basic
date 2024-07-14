@@ -5,12 +5,38 @@ import UserMiddleware from '../middlewares/user.middleware.js';
 import AuthMiddleware from '../middlewares/auth.middleware.js';
 
 const router = Router();
-
+const reservedSubroutesNames = ['getAllUsers', 'findUsers'];
 router.post('/create', async (req, res) => {
     const response = await UserService.createUser(req);
     res.status(response.code).json(response.message);
 });
-
+router.post('/bulkCreate', 
+    [UserMiddleware.arrayValidFormat, AuthMiddleware.validateToken], 
+    async (req, res) => {
+    req.locals = res.locals
+    const response = await UserService.bulkCreate(req);
+    res.status(response.code).json(response.message);
+})
+router.get(
+    '/getAllUsers',
+    [
+        AuthMiddleware.validateToken,
+    ],
+    async (_, res) => {
+        const response = await UserService.getAllActiveUsers();
+        res.status(response.code).json(response.message);
+    }
+)
+router.get(
+    '/findUsers',
+    [
+        AuthMiddleware.validateToken,
+    ],
+    async (req, res) => {
+        const response = await UserService.findUsers(req);
+        res.status(response.code).json(response.message);
+    }
+)
 router.get(
     '/:id',
     [
@@ -20,6 +46,7 @@ router.get(
         UserMiddleware.hasPermissions
     ],
     async (req, res) => {
+        if (reservedSubroutesNames.includes(req.params.id)) return next(); //telling express to ignore if param is a subroute
         const response = await UserService.getUserById(req.params.id);
         res.status(response.code).json(response.message);
     });
