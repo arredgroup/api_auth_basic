@@ -20,7 +20,7 @@ const login = async (email, password) => {
         name: response.name,
         email: response.email,
         id: response.id,
-        roles: ['user'],
+        roles: ['Admin'],
         expiration: expiration,
     })).toString('base64');
 

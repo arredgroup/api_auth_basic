@@ -42,6 +42,89 @@ const createUser = async (req) => {
     }
 };
 
+const validateUser = async (user) => {
+    
+    if (!user.nombre || !user.email) {
+        return {
+            success: false,
+            message: 'El nombre y el correo electrónico son obligatorios'
+        };
+    }
+
+    
+
+    return {
+        success: true,
+        message: 'Usuario validado correctamente'
+    };
+};
+
+const getAllUsers = async () => {
+    try {
+        const users = await db.User.findAll({
+            where: {
+                status: true, 
+            }
+        });
+        return {
+            code: 200,
+            message: users,
+        };
+    } catch (error) {
+       
+        console.error('Error al obtener todos los usuarios:', error);
+        return {
+            code: 500,
+            message: 'Error al obtener todos los usuarios',
+        };
+    }
+};
+
+
+const findUsers = async (queryParams) => {
+    const { status, name, before, after } = queryParams;
+
+    let sql = `
+    SELECT DISTINCT u.* 
+    FROM Users u
+    JOIN Sessions s ON u.id = s.id_user 
+    WHERE 1=1 
+  `; 
+
+    let whereConditions = [];
+    if (status === 'false' || status === "0") {
+      whereConditions.push('u.`status` = false');
+    } else if (status === 'true' || status === "1") {
+      whereConditions.push('u.`status` = true');
+    }
+
+    if (name) {
+      whereConditions.push(`u.name LIKE '%${name}%'`);
+    }
+    if (before) {
+      whereConditions.push(`s.createdAt <= '${before}'`);
+    }
+    if (after) {
+      whereConditions.push(`s.createdAt >= '${after}'`);
+    }
+    if (whereConditions.length > 0) {
+      sql += ` AND ${whereConditions.join(' AND ')}`;
+    }
+    try {
+      const [rows] = await db.sequelize.query(sql);
+      return {
+        code: 200,
+        message: rows,
+      };
+    } catch (error) {
+      console.error('Error executing query:', error);
+      return {
+        code: 500,
+        message: 'Internal server error',
+      };
+    }
+}
+
 const getUserById = async (id) => {
     return {
         code: 200,
@@ -53,6 +136,8 @@ const getUserById = async (id) => {
         })
     };
 }
+
+
 
 const updateUser = async (req) => {
     const user = db.User.findOne({
@@ -102,9 +187,47 @@ const deleteUser = async (id) => {
     };
 }
 
+const bulkCreate = async (usersToCreate) => {
+    if (!Array.isArray(usersToCreate)) {
+      return {
+        code: 400,
+        message: 'Invalid request body. Please provide an array of users.'
+      };
+    }
+
+    let successfulUsers = 0;
+    let failedUsers = 0;
+
+    for (const user of usersToCreate) {
+      try {
+        const response = await createUser(user);
+        if (response.code === 200) {
+          successfulUsers++;
+        } else {
+          failedUsers++;
+        }
+      } catch (error) {
+        console.error('Error creating users:', error);
+        failedUsers++;
+      }
+    }
+
+    let message = 'Users created: ' + successfulUsers + '\n';
+    message += 'Users not created: ' + failedUsers;
+
+    return {
+      code: 200,
+      message: message,
+    };
+};
+
 export default {
     createUser,
     getUserById,
+    getAllUsers,
     updateUser,
     deleteUser,
+    validateUser,
+    findUsers,
+    bulkCreate
 }
