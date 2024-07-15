@@ -42,6 +42,30 @@ const createUser = async (req) => {
     }
 };
 
+const bulkCreateUsers = async (user) => {
+  const { name, email, password, password_second, cellphone } = user;
+
+  if (password !== password_second) {
+    return false;
+  }
+
+  const userExists = await db.User.findOne({where: {email: email}});
+  if (userExists) {
+    return false;
+  }
+
+  const encryptedPassword = await bcrypt.hash(password, 10);
+  await db.User.create({
+    name,
+    email,
+    password: encryptedPassword,
+    cellphone,
+    status: true
+  });
+
+  return true;
+}
+
 const getUserById = async (id) => {
     return {
         code: 200,
@@ -52,6 +76,40 @@ const getUserById = async (id) => {
             }
         })
     };
+}
+
+const getAllUsers = async () => {
+  return {
+    code: 200,
+    message: await db.User.findAll({
+      where: {
+        status: true
+      }
+    })
+  };
+}
+
+const findUsers = async (query) => {
+    let condiciones = {};
+
+    if (query.eliminados !== undefined) {
+        if (query.eliminados === "true"){
+        condiciones.status = true;
+    } else {
+        condiciones.status = false;
+    }
+    }
+    if (query.nombre) {
+        condiciones.name = { [db.Sequelize.Op.like]: `%${query.nombre}%` };
+    }
+    if (query.antesSesion) {
+        condiciones.createdAt = { [db.Sequelize.Op.lt]: new Date(query.antesSesion) };
+    }
+    if (query.despuesSesion) {
+        condiciones.createdAt = { ...condiciones.createdAt, [db.Sequelize.Op.gt]: new Date(query.despuesSesion) }; // Usar `query.despuesSesion`
+    }
+    console.log(condiciones);
+    return await db.User.findAll({ where: condiciones });
 }
 
 const updateUser = async (req) => {
@@ -104,7 +162,10 @@ const deleteUser = async (id) => {
 
 export default {
     createUser,
+    bulkCreateUsers,
     getUserById,
+    getAllUsers,
+    findUsers,
     updateUser,
     deleteUser,
 }
