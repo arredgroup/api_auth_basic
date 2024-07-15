@@ -1,5 +1,6 @@
 import db from '../dist/db/models/index.js';
 import bcrypt from 'bcrypt';
+import { Op } from 'sequelize';
 
 const createUser = async (req) => {
     const {
@@ -102,9 +103,123 @@ const deleteUser = async (id) => {
     };
 }
 
+const getAllUsers = async () => {
+
+    const user = await db.User.findAll({
+        where: {
+            status: true,
+        }
+    });
+
+    return {
+        code: 200,
+        message: user,
+    };
+}
+
+const findUsers = async (req, res) => {
+    console.log('Params received:', req.query);
+
+    const { status, name, login_before_date, login_after_date } = req.query;
+    const whereClause = {};
+
+    if (status !== undefined) {
+        whereClause.status = status === 'true';
+    }
+    if (name) {
+        whereClause.name = {
+            [Op.like]: `%${name}%`
+        };
+    }
+    
+    if (login_before_date && login_after_date) {
+        const startDate = new Date(login_after_date);  
+        const endDate = new Date(login_before_date); 
+        whereClause.updatedAt = {
+            [Op.between]: [startDate, endDate]
+        };
+    } else if (login_before_date) {
+        whereClause.updatedAt = {
+            [Op.lte]: new Date(login_before_date)
+        };
+    } else if (login_after_date) {
+        whereClause.updatedAt = {
+            [Op.gte]: new Date(login_after_date)
+        };
+    }
+
+    console.log('Where clause:', whereClause);
+
+    const users = await db.User.findAll({
+        where: whereClause
+    });
+
+    console.log('Users found:', users);
+    return {
+        code: 200,
+        message: users,
+    };
+};
+
+const validateUser = (user) => {
+    return user.name && user.email && user.password && user.password === user.password_second;
+};
+
+const bulkCreate = async (req, res) => {
+    const usersToCreate = req.body;
+
+    if (!Array.isArray(usersToCreate)) {
+        return res.status(400).json({
+            code: 400,
+            message: 'Invalid request format: Expected an array of users.'
+        });
+    }
+
+    let createdUserCount = 0;
+    let failedUserCount = 0;
+    const failedUsers = [];
+
+    for (const user of usersToCreate) {
+        try {
+            const result = await createUser({
+                body: {
+                    name: user.name,
+                    email: user.email,
+                    password: user.password,
+                    password_second: user.password_second,
+                    cellphone: user.cellphone
+                }
+            });
+
+            if (result.code === 200) {
+                createdUserCount++;
+            } else {
+                failedUserCount++;
+                failedUsers.push({ email: user.email, reason: result.message });
+            }
+        } catch (error) {
+            console.error(`Error creating user ${user.email}:`, error);
+            failedUserCount++;
+            failedUsers.push({ email: user.email, reason: 'Internal server error' });
+        }
+    }
+
+    return res.status(200).json({
+        code: 200,
+        message: `Proceso de creación de usuarios terminado`,
+        createdUserCount,
+        failedUserCount
+    });
+};
+
+
 export default {
     createUser,
     getUserById,
     updateUser,
     deleteUser,
+    getAllUsers,
+    findUsers,
+    bulkCreate,
+
 }

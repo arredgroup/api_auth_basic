@@ -9,7 +9,46 @@ const router = Router();
 router.post('/create', async (req, res) => {
     const response = await UserService.createUser(req);
     res.status(response.code).json(response.message);
+}); 
+
+router.get(
+    '/findUsers',
+    [
+        AuthMiddleware.validateToken,
+    ],
+    async (req, res) => {
+        const response = await UserService.findUsers(req);
+        res.status(response.code).json(response.message);
 });
+
+router.get(
+    '/getAllUsers',
+    [
+        AuthMiddleware.validateToken,
+    ],
+    async (req, res) => {
+        const response = await UserService.getAllUsers(req);
+        res.status(response.code).json(response.message);
+});
+
+router.get(
+    '/getAllUsersSessions',
+    [
+        AuthMiddleware.validateToken,
+    ],
+    async (req, res) => {
+        const response = await UserService.getAllUsersSessions(req);
+        res.status(response.code).json(response.message);
+});
+
+router.post(
+    '/bulkCreate',
+    [
+        AuthMiddleware.validateToken,
+        UserMiddleware.hasPermissions,
+    ],
+    UserService.bulkCreate
+);
 
 router.get(
     '/:id',
@@ -46,5 +85,7 @@ router.delete('/:id',
        const response = await UserService.deleteUser(req.params.id);
        res.status(response.code).json(response.message);
     });
+
+
 
 export default router;
