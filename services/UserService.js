@@ -1,18 +1,19 @@
 import db from '../dist/db/models/index.js';
 import bcrypt from 'bcrypt';
+import { Op } from 'sequelize';
 
-const createUser = async (req) => {
+const createUser = async (data) => {
     const {
         name,
         email,
         password,
         password_second,
         cellphone
-    } = req.body;
+    } = data;
     if (password !== password_second) {
         return {
             code: 400,
-            message: 'Passwords do not match'
+            message: 'Contraseña incorrecta'
         };
     }
     const user = await db.User.findOne({
@@ -23,7 +24,7 @@ const createUser = async (req) => {
     if (user) {
         return {
             code: 400,
-            message: 'User already exists'
+            message: 'Usuario ya existe'
         };
     }
 
@@ -38,8 +39,33 @@ const createUser = async (req) => {
     });
     return {
         code: 200,
-        message: 'User created successfully with ID: ' + newUser.id,
+        message: 'Usuario creado con ID: ' + newUser.id,
     }
+};
+
+const bulkCreateUsers = async (users) => {
+    let successfulCount = 0;
+    let failedCount = 0;
+
+    for (const user of users) {
+        try {
+            const response = await createUser(user);
+            if (response.code === 200) {
+                successfulCount++;
+            } else {
+                failedCount++;
+            }
+        } catch (error) {
+            failedCount++;
+        }
+    }
+
+    return {
+        code: 200,
+        message: 'Proceso de creación masiva completado',
+        successfulCount,
+        failedCount
+    };
 };
 
 const getUserById = async (id) => {
@@ -73,7 +99,7 @@ const updateUser = async (req) => {
     });
     return {
         code: 200,
-        message: 'User updated successfully'
+        message: 'Usuario actualizado correctamente'
     };
 }
 
@@ -98,13 +124,80 @@ const deleteUser = async (id) => {
     });
     return {
         code: 200,
-        message: 'User deleted successfully'
+        message: 'Usuario eliminado exitosamente'
     };
 }
+
+const getAllUsers = async () => {
+    try {
+        const users = await db.User.findAll({
+        });
+        return {
+            code: 200,
+            message: users
+        };
+    } catch (error) {
+        return {
+            code: 500,
+            message: 'A ocurrido un error al encontrar el usuario',
+            error: error.message
+        };
+    }
+};
+
+const findUsers = async (query) => {
+    const { status, name, Before, After } = query;
+    const whereConditions = {};
+
+    if (status !== undefined) {
+        whereConditions.status = status === 'true';
+    }
+
+    if (name) {
+        whereConditions.name = {
+            [Op.like]: `%${name}%`
+        };
+    }
+
+    if (Before && After) {
+        whereConditions.createdAt = {
+            [Op.between]: [new Date(After), new Date(Before)],
+        };
+    } else if (Before) {
+        whereConditions.createdAt = {
+            [Op.lte]: new Date(Before)
+        };
+    } else if (After) {
+        whereConditions.createdAt = {
+            [Op.gte]: new Date(After)
+        };
+    }
+
+    try {
+        const users = await db.User.findAll({
+            where: whereConditions
+        });
+
+        return {
+            code: 200,
+            message: users
+        };
+    } catch (error) {
+        console.error('Error querying users:', error);
+        return {
+            code: 500,
+            message: 'Error interno del servidor',
+            error: error.message,
+        };
+    }
+};
 
 export default {
     createUser,
     getUserById,
     updateUser,
     deleteUser,
+    getAllUsers,
+    findUsers,
+    bulkCreateUsers
 }
